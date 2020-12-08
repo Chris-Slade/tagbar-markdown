@@ -1,71 +1,82 @@
-#!/usr/bin/env php
-<?php
-if (!isset($argv[2])) {
-    echo <<<EOL
+#!/usr/bin/env perl
+use 5.010;
+use strict;
+use warnings;
+use Cwd qw(abs_path);
+use File::Spec;
+
+@ARGV > 0 or die 'No arguments given';
+
+if (@ARGV == 1) {
+    print <<'EOD';
 !_TAG_FILE_FORMAT       2       /extended format; --format=1 will not append ;" to lines/'
 !_TAG_FILE_SORTED       0       /0=unsorted, 1=sorted, 2=foldcase/'
 !_TAG_PROGRAM_AUTHOR    lvht /git@lvht.net/'
 !_TAG_PROGRAM_NAME      mdctags        //'
-!_TAG_PROGRAM_URL       https://github.com/lvht/tagbar-markdown /official site/'
+!_TAG_PROGRAM_URL       https://github.com/Chris-Slade/tagbar-markdown /official site (forked)/'
 !_TAG_PROGRAM_VERSION   0.1.0   //'
 
-EOL;
+EOD
 }
 
-if (isset($argv[1])) {
-    $f = new SplFileObject($argv[1]);
+open my $f, '<', $ARGV[0] or die $!;
 
-    $path = $f->getRealPath();
-    $stack = [];
-    $in_code = false;
+my $path = abs_path(File::Spec->canonpath($ARGV[0]));
+my @stack;
+my $in_code = 0;
 
-    $lineNo = 0;
-    foreach ($f as $line) {
-        ++$lineNo;
-        if (preg_match('/^```/', $line)) {
-            $in_code = !$in_code;
+sub rtrim {
+    $_[0] =~ s/\s*$//;
+}
+
+while (my $line = readline($f)) {
+    chomp $line;
+    if ($line =~ /^```/) {
+        $in_code = !$in_code;
+    }
+    if (!$in_code) {
+        my ($match, $anchor, $title) = $line =~ /^((#+)\s+(\S.*))\s*$/;
+        next unless $anchor and $title;
+
+        my %header = (
+            'title' => $title,
+            'level' => length $anchor,
+        );
+
+        if (@stack == 0) {
+            unshift @stack, \%header;
+        } elsif ($stack[0]{'level'} < $header{'level'}) {
+            unshift @stack, \%header;
+        } else {
+            while (@stack && $stack[0]{'level'} >= $header{'level'}) {
+                shift @stack;
+            }
+            unshift @stack, \%header;
         }
-        if (!$in_code && preg_match('/^(#+)\s+(\S.*)$/', rtrim($line), $matches)) {
-            $title = $matches[2];
-            $anchor = $matches[0];
 
-            $line = [
-                'title' => $matches[2],
-                'level' => strlen($matches[1]),
-            ];
+        my @scopes = map { $_->{'title'} } reverse @stack;
+        pop @scopes;
+        my $scopes_str = join '::', @scopes;
+        my $level = $header{'level'};
+        my $plevel;
+        if (@stack < 2) {
+            $plevel = $level > 1 ? $level - 1 : 0;
+        } else {
+            $plevel = $stack[1]{'level'};
+        }
+        my $scope = $scopes_str ? "h$plevel:$scopes_str" : '';
+        my $type = chr(0x60 + $level);
 
-            if (count($stack) == 0) {
-                array_unshift($stack, $line);
-            } elseif ($stack[0]['level'] < $line['level']) {
-                array_unshift($stack, $line);
-            } else {
-                while (count($stack) && $stack[0]['level'] >= $line['level']) {
-                    array_shift($stack);
-                }
-                array_unshift($stack, $line);
+        if (@ARGV == 2) {
+            if ($level > 1) {
+                printf(
+                    "%s%s\n",
+                    ' ' x (length($anchor) - 2),
+                    "- [$title](#$title)"
+                );
             }
-
-            $scopes = array_map(function ($line) { return $line['title']; }, array_reverse($stack));
-            array_pop($scopes);
-            $scopesStr = implode('::', $scopes);
-            $level = $line['level'];
-            if (count($stack) < 2) {
-                $plevel = $level > 1 ? $level - 1 : 0;
-            } else {
-                $parent = $stack[1];
-                $plevel = $parent['level'];
-            }
-            $scope = $scopesStr ? "h$plevel:$scopesStr" : '';
-            $type = chr(0x60 + $level);
-
-            if (isset($argv[2])) {
-                if ($level > 1) {
-                    $title = $matches[2];
-                    echo str_pad('', strlen($matches[1])-2, ' ')."- [$title](#$title)\n";
-                }
-            } else {
-                echo "$title\t$path\t/^$anchor\$/;\"\t$type\tline:$lineNo\t$scope\n";
-            }
+        } else {
+            print "$title\t$path\t/^$match\$/;\"\t$type\tline:$.\t$scope\n";
         }
     }
 }

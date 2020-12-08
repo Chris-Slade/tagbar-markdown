@@ -3,6 +3,8 @@
 ### Intro
 tagbar-markdown is a tagbar extension for markdown.
 
+This fork rewrites the provided mdctags script in Perl, which replaces the PHP dependency.
+
 ### Screenshot
 ![2017-02-01_1359x723](https://cloud.githubusercontent.com/assets/13142418/22514376/12f8a792-e8da-11e6-9897-fb0136732a31.png)
 
@@ -18,9 +20,11 @@ call dein#add('', {'on_cmd' : 'TagbarToggle'})
 call dein#add('', {'on_ft' : 'markdown', 'if' : executable('php')})
 ```
 
-Please make sure **php** is in your `$PATH` and the `bin/mdctags` has execute permission.
+Please make sure **perl** is in your `$PATH` and the `bin/mdctags` has execute permission.
 
-execute ':MDAgenda' to insert content agenda in the current line.
+The minimum supported version is Perl 5.10, but it might work with earlier versions. The only Perl dependencies are the core modules `Cwd` and `File::Spec`.
+
+Execute ':MDAgenda' to insert content agenda in the current line.
 
 Enjoy :)
 
